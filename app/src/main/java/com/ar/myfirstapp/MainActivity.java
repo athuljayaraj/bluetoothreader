@@ -18,6 +18,7 @@ import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -27,6 +28,7 @@ import android.widget.ListView;
 import android.widget.Toast;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -304,7 +306,7 @@ public class MainActivity extends AppCompatActivity {
         try {
         connect("");
         }catch (IOException e){
-
+            Log.getStackTraceString(e);
         }
     }
 
@@ -313,8 +315,28 @@ public class MainActivity extends AppCompatActivity {
         BluetoothAdapter btAdapter = BluetoothAdapter.getDefaultAdapter();
         BluetoothDevice device = btAdapter.getRemoteDevice(deviceAddress);
         UUID uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
-        BluetoothSocket socket = device.createInsecureRfcommSocketToServiceRecord(uuid);
-        socket.connect();
+        BluetoothSocket socket = null;
+        BluetoothSocket sockFallback = null;
 
+        try {
+            socket = device.createRfcommSocketToServiceRecord(uuid);
+        socket.connect();
+        }
+        catch (IOException e){
+            String TAG = BluetoothManager.class.getName();
+            Log.e(TAG, "There was an error while establishing Bluetooth connection. Falling back..", e);
+            Class<?> clazz = socket.getRemoteDevice().getClass();
+            Class<?>[] paramTypes = new Class<?>[]{Integer.TYPE};
+            try {
+                Method m = clazz.getMethod("createRfcommSocket", paramTypes);
+                Object[] params = new Object[]{Integer.valueOf(1)};
+                sockFallback = (BluetoothSocket) m.invoke(socket.getRemoteDevice(), params);
+                sockFallback.connect();
+                socket = sockFallback;
+            } catch (Exception e2) {
+                Log.e(TAG, "Couldn't fallback while establishing Bluetooth connection.", e2);
+                throw new IOException(e2.getMessage());
+            }
+        }
     }
 }
